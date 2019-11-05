@@ -1,0 +1,40 @@
+# Copyright 2017 The Go Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+FROM golang:1.13-alpine AS build
+
+RUN mkdir /gocache
+ENV GOCACHE /gocache
+ENV GO111MODULE on
+
+COPY go.mod /go/src/playground/go.mod
+COPY go.sum /go/src/playground/go.sum
+WORKDIR /go/src/playground
+
+# Pre-build some packages to speed final install later.
+RUN go install golang.org/x/tools/godoc/static
+RUN go install golang.org/x/tools/imports
+RUN go install github.com/rogpeppe/go-internal/modfile
+RUN go install github.com/rogpeppe/go-internal/txtar
+
+# Add and compile playground daemon
+COPY . /go/src/playground/
+WORKDIR /go/src/playground
+RUN go install
+
+FROM alpine:3.10
+
+#RUN apt-get update && apt-get install -y git ca-certificates --no-install-recommends
+RUN apk update && apk add ca-certificates bash
+
+ENV GOPATH /go
+RUN mkdir /app
+
+COPY --from=build /go/bin/playground /app
+COPY edit.html /app
+COPY static /app/static
+WORKDIR /app
+
+EXPOSE 8080
+ENTRYPOINT ["/app/playground"]

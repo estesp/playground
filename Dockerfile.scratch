@@ -1,0 +1,47 @@
+# Copyright 2017 The Go Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+FROM golang:1.13-alpine AS build
+
+RUN mkdir /gocache
+ENV GOCACHE /gocache
+ENV GO111MODULE on
+
+COPY go.mod /go/src/playground/go.mod
+COPY go.sum /go/src/playground/go.sum
+WORKDIR /go/src/playground
+
+# Pre-build some packages to speed final install later.
+RUN go install golang.org/x/tools/godoc/static
+RUN go install golang.org/x/tools/imports
+RUN go install github.com/rogpeppe/go-internal/modfile
+RUN go install github.com/rogpeppe/go-internal/txtar
+
+# Add and compile playground daemon
+COPY . /go/src/playground/
+WORKDIR /go/src/playground
+RUN GO_EXTLINK_ENABLED=0 CGO_ENABLED=0 go build \
+        -ldflags "-w -extldflags -static" \
+        -tags netgo -installsuffix netgo \
+        -o playground
+
+FROM alpine:latest as temp
+RUN apk --update add ca-certificates curl
+
+FROM scratch
+
+# get certs from alpine
+COPY --from=temp /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=temp /tmp /tmp
+# from this site: https://github.com/robxu9/bash-static/releases/download/5.0/bash-linux
+COPY bash-linux /bin/bash
+
+WORKDIR /app/static
+COPY --from=build /go/src/playground /app
+COPY edit.html /app
+COPY static /app/static
+WORKDIR /app
+
+EXPOSE 8080
+ENTRYPOINT ["/app/playground"]

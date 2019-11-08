@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: playground-deployment
+  labels:
+    app: playground
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: playground
+  template:
+    metadata:
+      labels:
+        app: playground
+    spec:
+      containers:
+      - name: playground
+        image: us.icr.io/estesp/playground:alpine
+        ports:
+        - containerPort: 8080
+      nodeSelector:
+        kubernetes.io/hostname: 10.74.31.225
